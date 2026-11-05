@@ -59,7 +59,7 @@ def test_missing_ball_holds_the_last_team():
     s["nearest_dist"][:] = 0.5
     s["ball_present"][5:] = False
     labels = _run(s, dwell=2)
-    assert list(labels) == ["H"] * n
+    assert list(labels) == ["X"] + ["H"] * (n - 1)
 
 
 def test_one_frame_touch_does_not_flip():
@@ -81,7 +81,7 @@ def test_dwell_hands_possession_over():
     s["nearest_team"][4:] = 1
     s["nearest_dist"][:] = 1.0
     labels = _run(s, dwell=3)
-    assert list(labels) == ["H", "H", "H", "H", "A", "A", "A", "A"]
+    assert list(labels) == ["X", "X", "H", "H", "H", "H", "A", "A"]
 
 
 def test_loose_ball_does_not_change_team():
@@ -154,7 +154,7 @@ def test_a_short_gap_does_not_cancel_control():
     s["nearest_team"][4:] = 1
     s["ball_present"][6] = False
     held = _run(s, dwell=4, gap=2)
-    assert list(held[4:]) == ["A"] * 5
+    assert list(held) == ["X", "X", "X", "H", "H", "H", "H", "H", "A"]
     reset = _run(s, dwell=4, gap=0)
     assert list(reset[4:]) == ["H"] * 5
 
@@ -210,7 +210,7 @@ def test_a_slow_ball_at_the_feet_is_control():
         s["set_piece"], s["restart"], s["ungraded"], s["pre"],
         2.5, 2, 0, ball_speed, None, player_speed, second_dist, second_team,
     )
-    assert list(labels) == ["A", "A", "A", "A"]
+    assert list(labels) == ["X", "A", "A", "A"]
 
 
 def test_ungraded_and_pre_kickoff():

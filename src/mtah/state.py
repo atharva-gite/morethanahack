@@ -2,8 +2,8 @@
 
 Dead ball wins. A loose ball or a duel stays with the last team that had
 control. A new team takes the ball when it is at their feet, or when a slow
-ball reaches them and the other team is not also there. That change is
-written from the frame the reception started.
+ball reaches them and the other team is not also there. The label changes
+on the frame control sticks. The frames before that stay with the previous team.
 
 A spell shorter than a second is a touch when the same team is on both
 sides, or when it dies straight into a stoppage. It never crosses a dead ball.
@@ -58,15 +58,14 @@ def decide(ball_present, ball_out, nearest_dist, nearest_team,
     With player speeds, control means the ball is at a player's feet or has
     slowed into a reception, and the other team is not also on it. Without
     those arrays, control falls back to distance inside control_radius_m.
-    A challenge survives gap_frames of a loose or missing ball. The change is
-    written from the frame it started.
+    A challenge survives gap_frames of a loose or missing ball. The new team
+    starts on the frame control sticks, not on the frames that led up to it.
     """
     n = len(ball_present)
     labels = np.empty(n, dtype="<U1")
     possessor = -1
     dwell_team = -1
     dwell_count = 0
-    dwell_start = 0
     gap_left = 0
     dwell_frames = max(1, int(dwell_frames))
     gap_frames = max(0, int(gap_frames))
@@ -128,16 +127,11 @@ def decide(ball_present, ball_out, nearest_dist, nearest_team,
             if team != dwell_team:
                 dwell_team = team
                 dwell_count = 1
-                dwell_start = i
             else:
                 dwell_count += 1
             gap_left = gap_frames
             if dwell_count >= dwell_frames and possessor != team:
                 possessor = team
-                letter = _letter(team)
-                for frame in range(dwell_start, i + 1):
-                    if labels[frame] in ("H", "A", "X"):
-                        labels[frame] = letter
         elif dwell_team >= 0 and gap_left > 0:
             gap_left -= 1
         else:

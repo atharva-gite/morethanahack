@@ -64,10 +64,28 @@ def write_submission(path, labels):
 
 
 def summarise(labels):
-    """Label counts only. No coordinates, no frame dumps."""
+    """Label counts and in-play time. No coordinates, no frame dumps.
+
+    The home and away split is what this file claims. It is not the private
+    ground truth and not an official match report.
+    """
+    from games import GAME, GAMES
+
+    fps = float(GAMES[GAME]["fps"])
     lines = ["rows {}".format(len(labels))]
     total = float(len(labels)) if len(labels) else 1.0
+    counts = {}
     for label in ("H", "A", "D", "X"):
         count = int(np.sum(labels == label))
+        counts[label] = count
         lines.append("{} {:>7} {:5.1f}%".format(label, count, 100.0 * count / total))
+    alive = counts["H"] + counts["A"]
+    lines.append("in-play possession over the whole match, from this file")
+    if alive:
+        lines.append("H {:>7.1f}s  {:5.1f}% of in-play   ({:.1f} min)".format(
+            counts["H"] / fps, 100.0 * counts["H"] / alive, counts["H"] / fps / 60.0))
+        lines.append("A {:>7.1f}s  {:5.1f}% of in-play   ({:.1f} min)".format(
+            counts["A"] / fps, 100.0 * counts["A"] / alive, counts["A"] / fps / 60.0))
+    else:
+        lines.append("no in-play frames")
     return "\n".join(lines)
