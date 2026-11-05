@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.join(ROOT, "src"))
 from mtah.fetch import WANTED, choose_members, extract_archive  # noqa: E402
 from mtah.regions import make_region_masks  # noqa: E402
 from mtah.signals import read_signals  # noqa: E402
-from mtah.state import absorb_touches, decide  # noqa: E402
+from mtah.state import absorb_touches, bridge_passes, decide  # noqa: E402
 from mtah.tags import masks_from_events, side_of_team_tag  # noqa: E402
 
 
@@ -125,6 +125,31 @@ def test_named_restart_overrides_last_touch_and_na_does_not():
     assert list(labels) == ["H", "H", "D", "D", "H", "H"]
 
 
+def test_a_pass_between_one_teams_touches_stays_with_them():
+    labels = np.array(list("HHHAAAAHHH"))
+    secure = np.full(10, -1, dtype=np.int8)
+    secure[0:3] = 0
+    secure[7:10] = 0
+    assert "".join(bridge_passes(labels, secure, 10)) == "H" * 10
+
+
+def test_a_real_reception_between_two_passes_is_kept():
+    labels = np.array(list("HHHAAAAHHH"))
+    secure = np.full(10, -1, dtype=np.int8)
+    secure[0:3] = 0
+    secure[3:7] = 1
+    secure[7:10] = 0
+    assert "".join(bridge_passes(labels, secure, 10)) == "HHHAAAAHHH"
+
+
+def test_a_pass_does_not_cross_a_dead_ball():
+    labels = np.array(list("HHHDDDHHH"))
+    secure = np.full(9, -1, dtype=np.int8)
+    secure[0:3] = 0
+    secure[6:9] = 0
+    assert "".join(bridge_passes(labels, secure, 10)) == "HHHDDDHHH"
+
+
 def test_brief_touch_between_the_same_team_disappears():
     labels = np.array(list("HHHHHHHAAHHHHHHH"))
     assert "".join(absorb_touches(labels, min_frames=5)) == "H" * 16
@@ -213,23 +238,23 @@ def test_a_slow_ball_at_the_feet_is_control():
     assert list(labels) == ["X", "A", "A", "A"]
 
 
-def test_a_presser_does_not_take_the_ball_from_the_group():
+def test_a_rolling_ball_past_a_standing_player_is_not_a_reception():
     n = 6
     s = _blank(n)
     s["ball_present"][:] = True
     s["nearest_dist"][:] = 1.0
     s["nearest_team"][:2] = 0
     s["nearest_team"][2:] = 1
-    speed = np.full(n, 3.0)
+    ball_speed = np.full(n, 3.0)
+    player_speed = np.full(n, 3.0)
+    ball_speed[2:] = 6.0
+    player_speed[2:] = 0.0
     second_dist = np.full(n, 8.0)
     second_team = np.ones(n, dtype=np.int8)
-    home_near = np.full(n, 4, dtype=np.int16)
-    away_near = np.full(n, 1, dtype=np.int16)
     labels = decide(
         s["ball_present"], s["ball_out"], s["nearest_dist"], s["nearest_team"],
         s["set_piece"], s["restart"], s["ungraded"], s["pre"],
-        2.5, 2, 0, speed, None, speed, second_dist, second_team,
-        home_near, away_near,
+        2.5, 2, 0, ball_speed, None, player_speed, second_dist, second_team,
     )
     assert list(labels[1:]) == ["H"] * 5
 

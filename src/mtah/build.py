@@ -5,8 +5,8 @@ import os
 import numpy as np
 
 from mtah.params import (
-    CONTROL_GAP_FRAMES, OUT_OF_PITCH_MARGIN_M, RECEPTION_FRAMES, RECEPTION_RADIUS_M,
-    SUPPORT_RADIUS_M, TOUCH_FRAMES,
+    CONTROL_GAP_FRAMES, OUT_OF_PITCH_MARGIN_M, PASS_BRIDGE_FRAMES, RECEPTION_FRAMES,
+    RECEPTION_RADIUS_M, TOUCH_FRAMES,
 )
 from mtah.regions import make_region_masks
 from mtah.signals import read_signals
@@ -28,7 +28,6 @@ def build_labels(data_dir=None, game="BAR-ATH"):
         n_frames,
         GAMES[game]["pitch"],
         OUT_OF_PITCH_MARGIN_M,
-        SUPPORT_RADIUS_M,
     )
     set_piece, restart = masks_from_events(load(game, data_dir), n_frames)
     ungraded, pre_kickoff = make_region_masks(n_frames, game)
@@ -49,8 +48,7 @@ def build_labels(data_dir=None, game="BAR-ATH"):
         signals.nearest_speed,
         signals.second_dist,
         signals.second_team,
-        signals.home_near,
-        signals.away_near,
+        PASS_BRIDGE_FRAMES,
     )
     return absorb_touches(labels, TOUCH_FRAMES)
 

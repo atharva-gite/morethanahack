@@ -1,9 +1,9 @@
 """Control from the ball and the players around it, then a cleanup of touches.
 
-Dead ball wins. A loose ball or a duel stays with the last team that had
-control. A new team takes the ball when it is at their feet, or when a slow
-ball reaches them and the other team is not also there. The label changes
-on the frame control sticks. The frames before that stay with the previous team.
+Dead ball wins. A loose ball, a duel, or a pass still rolling past a standing
+opponent stays with the last team that had control. A new team takes the ball
+when it is at their feet and they are dribbling it or it has stopped with
+them. The label changes on the frame that reception sticks.
 
 A spell shorter than a second is a touch when the same team is on both
 sides, or when it dies straight into a stoppage. It never crosses a dead ball.
@@ -46,13 +46,17 @@ def _under_control(dist, team, ball_speed, player_speed, other_dist, other_team)
     )
 
 
-def _outnumbered(team, home_near, away_near):
-    """The other team has more players around the ball than this one."""
-    if team < 0 or home_near != home_near or away_near != away_near:
-        return False
-    own = home_near if team == 0 else away_near
-    other = away_near if team == 0 else home_near
-    return other > own
+def _has_received(ball_speed, player_speed):
+    """The new team is dribbling, or the ball has stopped with them.
+
+    A ball still rolling past a standing player is a pass, not a reception.
+    Missing speeds do not block the change.
+    """
+    if not (ball_speed == ball_speed and player_speed == player_speed):
+        return True
+    if abs(ball_speed - player_speed) <= SPEED_MATCH_MPS:
+        return True
+    return ball_speed <= 4.0 and player_speed <= 4.0 and ball_speed <= player_speed + 1.5
 
 
 def _letter(possessor):
@@ -67,7 +71,7 @@ def decide(ball_present, ball_out, nearest_dist, nearest_team,
            set_piece, restart_team, ungraded, pre_kickoff,
            control_radius_m, dwell_frames, gap_frames=0, ball_speed=None,
            max_control_speed=None, nearest_speed=None, second_dist=None,
-           second_team=None, home_near=None, away_near=None):
+           second_team=None, pass_frames=0):
     """Label every frame. Arrays are the same length. Possessor codes are 0/1.
 
     With player speeds, control means the ball is at a player's feet or has
@@ -84,6 +88,7 @@ def decide(ball_present, ball_out, nearest_dist, nearest_team,
     gap_left = 0
     dwell_frames = max(1, int(dwell_frames))
     gap_frames = max(0, int(gap_frames))
+    secure = np.full(n, -1, dtype=np.int8)
 
     for i in range(n):
         if ungraded[i]:
@@ -126,16 +131,20 @@ def decide(ball_present, ball_out, nearest_dist, nearest_team,
                 ball_present[i] and team >= 0 and dist == dist
                 and dist <= control_radius_m and not in_flight
             )
+            if close:
+                secure[i] = team
         elif ball_present[i] and not in_flight:
             other_dist = second_dist[i] if second_dist is not None else np.nan
             other_team = int(second_team[i]) if second_team is not None else -1
-            close = _under_control(
+            controlled = _under_control(
                 dist, team, speed, nearest_speed[i], other_dist, other_team,
             )
-            if close and home_near is not None and _outnumbered(
-                team, home_near[i], away_near[i],
-            ):
-                close = False
+            if controlled:
+                secure[i] = team
+            close = controlled and (
+                possessor < 0 or team == possessor
+                or _has_received(speed, nearest_speed[i])
+            )
         else:
             close = False
         if close and team == possessor:
@@ -159,6 +168,28 @@ def decide(ball_present, ball_out, nearest_dist, nearest_team,
             gap_left = 0
         labels[i] = _letter(possessor)
 
+    return bridge_passes(labels, secure, pass_frames)
+
+
+def bridge_passes(labels, secure, max_gap):
+    """A pass between two controlled touches by one team stays with that team.
+
+    The opponent must not have controlled the ball in between, and the gap
+    must not contain a dead ball or an ungraded frame.
+    """
+    if max_gap <= 0:
+        return labels
+    labels = np.array(labels, dtype="<U1", copy=True)
+    held = np.flatnonzero(np.asarray(secure) >= 0)
+    for left, right in zip(held[:-1], held[1:]):
+        if int(secure[left]) != int(secure[right]):
+            continue
+        if right - left - 1 > max_gap or right <= left + 1:
+            continue
+        segment = labels[left + 1:right]
+        if np.any((segment == "D") | (segment == "X")):
+            continue
+        labels[left + 1:right] = _letter(int(secure[left]))
     return labels
 
 

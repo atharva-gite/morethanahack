@@ -37,6 +37,10 @@ CONTROL_GAP_FRAMES = 10
 # straight into a stoppage, is a touch. One second at 25 fps.
 TOUCH_FRAMES = 25
 
+# Two controlled touches by the same team, with no dead ball between them and
+# no controlled touch by the opponent, are one pass. Four seconds at 25 fps.
+PASS_BRIDGE_FRAMES = 100
+
 # Tracking noise puts an in-play ball just past the line. A metre does not.
 OUT_OF_PITCH_MARGIN_M = 1.0
 
