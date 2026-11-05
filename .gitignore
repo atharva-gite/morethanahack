@@ -62,3 +62,14 @@ __pycache__/
 venv/
 env/
 .DS_Store
+
+# The organiser download link is a secret. It stays in the Colab secrets panel.
+.env
+.env.*
+*secret*
+secrets.toml
+.ipynb_checkpoints/
+
+# A downloaded submission is a full-match label file. Regenerate it; do not commit it.
+/submission.csv
+submissions/
