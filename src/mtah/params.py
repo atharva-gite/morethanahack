@@ -13,6 +13,10 @@ RECEPTION_RADIUS_M = 2.5
 # Both teams inside this radius means a duel. Possession stays where it was.
 CONTEST_RADIUS_M = 2.0
 
+# The nearest opponent must be at least this much farther than the player on
+# the ball. A presser standing next to a pass does not take possession.
+ISOLATION_GAP_M = 1.0
+
 # Dribbling: ball speed and the controlling player's speed agree, in m/s.
 SPEED_MATCH_MPS = 4.0
 

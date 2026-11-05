@@ -12,7 +12,8 @@ sides, or when it dies straight into a stoppage. It never crosses a dead ball.
 import numpy as np
 
 from mtah.params import (
-    CONTEST_RADIUS_M, FEET_RADIUS_M, RECEPTION_RADIUS_M, SLOW_BALL_MPS, SPEED_MATCH_MPS,
+    CONTEST_RADIUS_M, FEET_RADIUS_M, ISOLATION_GAP_M, RECEPTION_RADIUS_M,
+    SLOW_BALL_MPS, SPEED_MATCH_MPS,
 )
 
 _ALIVE = ("H", "A")
@@ -27,6 +28,11 @@ def _under_control(dist, team, ball_speed, player_speed, other_dist, other_team)
         and other_dist <= CONTEST_RADIUS_M and dist <= CONTEST_RADIUS_M
     )
     if contested:
+        return False
+    if (
+        other_team >= 0 and other_team != team and other_dist == other_dist
+        and other_dist < dist + ISOLATION_GAP_M
+    ):
         return False
     speeds_known = (
         ball_speed == ball_speed and player_speed == player_speed

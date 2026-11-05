@@ -81,6 +81,7 @@ def summarise(labels):
         lines.append("{} {:>7} {:5.1f}%".format(label, count, 100.0 * count / total))
     alive = counts["H"] + counts["A"]
     lines.append("in-play possession over the whole match, from this file")
+    lines.append("not a published share and not the private ground truth")
     if alive:
         lines.append("H {:>7.1f}s  {:5.1f}% of in-play   ({:.1f} min)".format(
             counts["H"] / fps, 100.0 * counts["H"] / alive, counts["H"] / fps / 60.0))

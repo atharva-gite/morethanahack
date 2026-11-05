@@ -213,6 +213,28 @@ def test_a_slow_ball_at_the_feet_is_control():
     assert list(labels) == ["X", "A", "A", "A"]
 
 
+def test_a_nearby_opponent_does_not_take_a_pass():
+    n = 6
+    s = _blank(n)
+    s["ball_present"][:] = True
+    s["nearest_dist"][:] = 1.0
+    s["nearest_team"][:2] = 0
+    s["nearest_team"][2:] = 1
+    speed = np.full(n, 3.0)
+    second_dist = np.full(n, 6.0)
+    second_team = np.ones(n, dtype=np.int8)
+    # After the home player has it, an away player is nearest but a home
+    # player is still within a metre of them. That is pressure, not a take.
+    second_dist[2:] = 1.8
+    second_team[2:] = 0
+    labels = decide(
+        s["ball_present"], s["ball_out"], s["nearest_dist"], s["nearest_team"],
+        s["set_piece"], s["restart"], s["ungraded"], s["pre"],
+        2.5, 2, 0, speed, None, speed, second_dist, second_team,
+    )
+    assert list(labels[1:]) == ["H"] * 5
+
+
 def test_ungraded_and_pre_kickoff():
     n = 4
     s = _blank(n)
