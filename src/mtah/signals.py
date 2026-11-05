@@ -14,7 +14,8 @@ MISSING = "N"
 
 Signals = namedtuple(
     "Signals",
-    "ball_present ball_x ball_y ball_speed nearest_dist nearest_team ball_out",
+    "ball_present ball_x ball_y ball_speed nearest_dist nearest_team nearest_speed "
+    "second_dist second_team ball_out",
 )
 
 
@@ -55,6 +56,9 @@ def read_signals(raw_path, team_of_track, n_frames, pitch, margin_m):
     ball_speed = np.full(n_frames, np.nan)
     nearest_dist = np.full(n_frames, np.nan)
     nearest_team = np.full(n_frames, -1, dtype=np.int8)
+    nearest_speed = np.full(n_frames, np.nan)
+    second_dist = np.full(n_frames, np.nan)
+    second_team = np.full(n_frames, -1, dtype=np.int8)
     ball_out = np.zeros(n_frames, dtype=bool)
 
     with open(raw_path) as handle:
@@ -85,7 +89,7 @@ def read_signals(raw_path, team_of_track, n_frames, pitch, margin_m):
             )
 
             best = None
-            best_team = -1
+            second = None
             for slot, group in enumerate(parts[1].split(GROUP_SEP)):
                 if slot >= len(team_of_track) or not group:
                     continue
@@ -95,13 +99,21 @@ def read_signals(raw_path, team_of_track, n_frames, pitch, margin_m):
                 dx = player[0] * length - x
                 dy = player[1] * width - y
                 distance = dx * dx + dy * dy
-                if best is None or distance < best:
-                    best = distance
-                    best_team = int(team_of_track[slot])
+                team = int(team_of_track[slot])
+                if best is None or distance < best[0]:
+                    second = best
+                    best = (distance, team, player[2])
+                elif second is None or distance < second[0]:
+                    second = (distance, team, player[2])
             if best is not None:
-                nearest_dist[video_frame] = best ** 0.5
-                nearest_team[video_frame] = best_team
+                nearest_dist[video_frame] = best[0] ** 0.5
+                nearest_team[video_frame] = best[1]
+                nearest_speed[video_frame] = best[2]
+            if second is not None:
+                second_dist[video_frame] = second[0] ** 0.5
+                second_team[video_frame] = second[1]
 
     return Signals(
-        ball_present, ball_x, ball_y, ball_speed, nearest_dist, nearest_team, ball_out,
+        ball_present, ball_x, ball_y, ball_speed, nearest_dist, nearest_team,
+        nearest_speed, second_dist, second_team, ball_out,
     )

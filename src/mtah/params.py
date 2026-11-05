@@ -4,20 +4,30 @@ Changing them because the public spellF1 moved is the failure mode in
 EVALUATION.md: baseline_smooth125 wins that window and loses the match.
 """
 
-# A player has the ball at their feet. Nearest-body-on-the-pitch is not control.
-CONTROL_RADIUS_M = 2.5
+# Ball at a player's feet. Nearer than "whoever is closest on the pitch".
+FEET_RADIUS_M = 1.5
 
-# How long a new team must actually keep the ball before it is a change.
-# CHALLENGE.md calls control "a few seconds". Three seconds at 25 fps, applied
-# to every frame, not only to spells that already look short.
-MIN_CONTROL_FRAMES = 75
+# A reception: the ball has slowed and a player is close, before it is at his feet.
+RECEPTION_RADIUS_M = 2.5
 
-# A one-second hole in the tracking, or a loose ball, does not cancel a
-# challenge that is already underway and does not hand the ball over.
-CONTROL_GAP_FRAMES = 25
+# Both teams inside this radius means a duel. Possession stays where it was.
+CONTEST_RADIUS_M = 2.0
 
-# Passes in flight are not control, even if a player is the nearest body.
-MAX_CONTROL_SPEED_MPS = 15.0
+# Dribbling: ball speed and the controlling player's speed agree, in m/s.
+SPEED_MATCH_MPS = 4.0
+
+# A slow ball next to a player is a reception even if the speeds do not match yet.
+SLOW_BALL_MPS = 7.0
+
+# Frames of real control before a change is committed. 10 frames is 0.4 s.
+RECEPTION_FRAMES = 10
+
+# A brief loose or missing ball does not cancel a reception already underway.
+CONTROL_GAP_FRAMES = 10
+
+# A spell shorter than a second, with the same team on both sides or dying
+# straight into a stoppage, is a touch. One second at 25 fps.
+TOUCH_FRAMES = 25
 
 # Tracking noise puts an in-play ball just past the line. A metre does not.
 OUT_OF_PITCH_MARGIN_M = 1.0

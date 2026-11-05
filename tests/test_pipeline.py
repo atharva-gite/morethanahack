@@ -176,6 +176,43 @@ def test_a_pass_in_flight_does_not_change_team():
     assert list(labels[1:]) == ["H"] * 5
 
 
+def test_a_duel_does_not_hand_the_ball_over():
+    n = 6
+    s = _blank(n)
+    s["ball_present"][:] = True
+    s["nearest_dist"][:] = 1.0
+    s["nearest_team"][:2] = 0
+    s["nearest_team"][2:] = 1
+    speed = np.ones(n)
+    second_dist = np.full(n, 8.0)
+    second_team = np.zeros(n, dtype=np.int8)
+    second_dist[2:] = 1.2
+    labels = decide(
+        s["ball_present"], s["ball_out"], s["nearest_dist"], s["nearest_team"],
+        s["set_piece"], s["restart"], s["ungraded"], s["pre"],
+        2.5, 2, 0, speed, None, speed, second_dist, second_team,
+    )
+    assert list(labels[1:]) == ["H"] * 5
+
+
+def test_a_slow_ball_at_the_feet_is_control():
+    n = 4
+    s = _blank(n)
+    s["ball_present"][:] = True
+    s["nearest_dist"][:] = 1.0
+    s["nearest_team"][:] = 1
+    ball_speed = np.full(n, 3.0)
+    player_speed = np.full(n, 3.0)
+    second_dist = np.full(n, 12.0)
+    second_team = np.zeros(n, dtype=np.int8)
+    labels = decide(
+        s["ball_present"], s["ball_out"], s["nearest_dist"], s["nearest_team"],
+        s["set_piece"], s["restart"], s["ungraded"], s["pre"],
+        2.5, 2, 0, ball_speed, None, player_speed, second_dist, second_team,
+    )
+    assert list(labels) == ["A", "A", "A", "A"]
+
+
 def test_ungraded_and_pre_kickoff():
     n = 4
     s = _blank(n)
@@ -239,6 +276,9 @@ def test_read_signals_distance_and_out_of_pitch():
     assert signals.ball_present.tolist() == [True, False, True]
     assert signals.nearest_team[0] == 0
     assert signals.nearest_dist[0] < 0.01
+    assert signals.nearest_speed[0] == 1.0
+    assert signals.second_team[0] == 1
+    assert signals.second_dist[0] > 10.0
     assert signals.ball_speed[0] == 2.5
     assert not signals.ball_present[1]
     assert signals.ball_out[2]
