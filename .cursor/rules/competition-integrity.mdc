@@ -1,0 +1,16 @@
+---
+description: What this hackathon forbids, including cloud LLMs and the public window
+alwaysApply: true
+---
+
+# Integrity
+
+Labels for Barcelona–Athletic must come from an algorithm. Never hand-label, hand-correct, or hand-tune frames, segments, or transitions of this match. Watching video to debug is allowed. Turning what was seen into labels, frame-specific constants, or rules tied to specific frames is not.
+
+No hand labels of this match for training or validation, in any amount. Hand labels of other matches are allowed only if the organisers can access them and the tech doc says what, how, by whom, and how much.
+
+Do not use the private ground truth or anything derived from it. Do not use Opta, StatsBomb, Wyscout, LaLiga, corrected tracking, or any other human-made data about this match. The public 5 minutes (`evaluation/gt/BAR-ATH_possession_gt_public.csv`, frames 11185–18684, 17 possessions) are a pipeline check only. Do not train on them. Do not pick a model, window, or threshold because it scores higher there. `baseline_smooth125` wins that window (spellF1 0.4242) and loses the match (0.2242 vs 0.2433).
+
+Do not read, paste, or upload match video, tracking, homography, Smart Tagging, or extracts into this chat or any other hosted LLM. The terms forbid that. Colab may run the repo on the bundle. The only paste-back is the validator summary: label counts, possession count, mean duration, and one public scoreboard. The public scorer and docs are fine to read.
+
+Do not commit or publish `data/`, clipped video, or frame-level tracking exports. `.gitignore` must keep the bundle out of the public submission repo.

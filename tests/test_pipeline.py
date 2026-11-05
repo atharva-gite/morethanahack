@@ -31,11 +31,11 @@ def _blank(n):
     }
 
 
-def _run(signals, dwell=3, radius=2.5):
+def _run(signals, dwell=3, radius=2.5, gap=0):
     return decide(
         signals["ball_present"], signals["ball_out"], signals["nearest_dist"],
         signals["nearest_team"], signals["set_piece"], signals["restart"],
-        signals["ungraded"], signals["pre"], radius, dwell,
+        signals["ungraded"], signals["pre"], radius, dwell, gap,
     )
 
 
@@ -143,6 +143,37 @@ def test_a_short_lead_in_joins_the_spell_that_keeps_the_ball():
 def test_a_touch_that_dies_at_a_stoppage_returns_to_the_holder():
     labels = np.array(list("HHHHHHHHAAADDDD"))
     assert "".join(absorb_touches(labels, min_frames=5)) == "HHHHHHHHHHHDDDD"
+
+
+def test_a_short_gap_does_not_cancel_control():
+    n = 9
+    s = _blank(n)
+    s["ball_present"][:] = True
+    s["nearest_dist"][:] = 1.0
+    s["nearest_team"][:4] = 0
+    s["nearest_team"][4:] = 1
+    s["ball_present"][6] = False
+    held = _run(s, dwell=4, gap=2)
+    assert list(held[4:]) == ["A"] * 5
+    reset = _run(s, dwell=4, gap=0)
+    assert list(reset[4:]) == ["H"] * 5
+
+
+def test_a_pass_in_flight_does_not_change_team():
+    n = 6
+    s = _blank(n)
+    s["ball_present"][:] = True
+    s["nearest_dist"][:] = 1.0
+    s["nearest_team"][:] = 0
+    s["nearest_team"][2:] = 1
+    speed = np.zeros(n)
+    speed[2:] = 25.0
+    labels = decide(
+        s["ball_present"], s["ball_out"], s["nearest_dist"], s["nearest_team"],
+        s["set_piece"], s["restart"], s["ungraded"], s["pre"],
+        2.5, 2, 0, speed, 15.0,
+    )
+    assert list(labels[1:]) == ["H"] * 5
 
 
 def test_ungraded_and_pre_kickoff():

@@ -25,14 +25,23 @@ def _letter(possessor):
 
 def decide(ball_present, ball_out, nearest_dist, nearest_team,
            set_piece, restart_team, ungraded, pre_kickoff,
-           control_radius_m, dwell_frames):
-    """Label every frame. Arrays are the same length. Possessor codes are 0/1."""
+           control_radius_m, dwell_frames, gap_frames=0, ball_speed=None,
+           max_control_speed=None):
+    """Label every frame. Arrays are the same length. Possessor codes are 0/1.
+
+    A challenge survives gap_frames of a missing or loose ball. The change is
+    written from the frame the challenge started once dwell_frames of real
+    control have accumulated.
+    """
     n = len(ball_present)
     labels = np.empty(n, dtype="<U1")
     possessor = -1
     dwell_team = -1
     dwell_count = 0
+    dwell_start = 0
+    gap_left = 0
     dwell_frames = max(1, int(dwell_frames))
+    gap_frames = max(0, int(gap_frames))
 
     for i in range(n):
         if ungraded[i]:
@@ -40,12 +49,14 @@ def decide(ball_present, ball_out, nearest_dist, nearest_team,
             possessor = -1
             dwell_team = -1
             dwell_count = 0
+            gap_left = 0
             continue
         if pre_kickoff[i]:
             labels[i] = "D"
             possessor = -1
             dwell_team = -1
             dwell_count = 0
+            gap_left = 0
             continue
 
         restart = int(restart_team[i])
@@ -53,39 +64,49 @@ def decide(ball_present, ball_out, nearest_dist, nearest_team,
             possessor = restart
             dwell_team = -1
             dwell_count = 0
+            gap_left = 0
 
         if set_piece[i] or ball_out[i]:
             labels[i] = "D"
             dwell_team = -1
             dwell_count = 0
-            continue
-
-        if not ball_present[i]:
-            labels[i] = _letter(possessor)
-            dwell_team = -1
-            dwell_count = 0
+            gap_left = 0
             continue
 
         team = int(nearest_team[i])
         dist = nearest_dist[i]
-        close = team >= 0 and dist == dist and dist <= control_radius_m
-        if close:
-            if team == dwell_team:
-                dwell_count += 1
-            else:
+        speed = ball_speed[i] if ball_speed is not None else np.nan
+        in_flight = (
+            max_control_speed is not None and speed == speed and speed > max_control_speed
+        )
+        close = (
+            ball_present[i] and team >= 0 and dist == dist
+            and dist <= control_radius_m and not in_flight
+        )
+        if close and team == possessor:
+            dwell_team = -1
+            dwell_count = 0
+            gap_left = 0
+        elif close:
+            if team != dwell_team:
                 dwell_team = team
                 dwell_count = 1
+                dwell_start = i
+            else:
+                dwell_count += 1
+            gap_left = gap_frames
             if dwell_count >= dwell_frames and possessor != team:
                 possessor = team
-                # The reception started when the dwell started, not when the
-                # counter finished. Leave dead-ball frames alone.
                 letter = _letter(team)
-                for frame in range(max(0, i - dwell_frames + 1), i + 1):
+                for frame in range(dwell_start, i + 1):
                     if labels[frame] in ("H", "A", "X"):
                         labels[frame] = letter
+        elif dwell_team >= 0 and gap_left > 0:
+            gap_left -= 1
         else:
             dwell_team = -1
             dwell_count = 0
+            gap_left = 0
         labels[i] = _letter(possessor)
 
     return labels

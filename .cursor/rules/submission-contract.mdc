@@ -1,0 +1,16 @@
+---
+description: Frame index, assets, and the three deliverables
+alwaysApply: true
+---
+
+# Contract
+
+Output is tactical-video index only. CSV header `frame,label`, 199319 rows, frames `0..199318` in order, labels `H` `A` `D` `X`. Home is Barcelona, away is Athletic. ~164k rows means the broadcast timeline was used by mistake.
+
+Alignment: ATD `frame_id` is 1-based (`video_frame = frame_id - 1`). Smart Tagging seconds are from tactical frame 0 (`round(seconds * 25)`). Homography `frame` is already 0-based. Pitch in metres is 105.3 × 68.0; ATD coordinates are 0–1. Scale before distances. 46 track slots are not 22 players and have no identities.
+
+Use assets as evidence, not as the answer. Smart Tagging phases are not possessions; 36 tags are `Team = N/A`, including every throw-in. Tactical homography is valid on every frame. Broadcast is optional, unsynchronised, and its homography is valid on 65.8% of its frames. Own detection is allowed only if an algorithm produces it.
+
+When implementation is requested, start from the starter loaders and `starter/baseline.py`, keep the scorer's environment (`numpy`, `pandas`, Python 3.8+), and put candidate CSVs in `evaluation/results/`.
+
+Deliverables, due 17 November 2026, one form response per team: `<team_name>.csv`, a public repo with pinned deps and the command that regenerates that file, and a short PDF or Markdown covering approach, assets used and dropped, training data, possession rules, limitations, and reproduction. Teams of 3–5 are required for the Innovation Challenge and Final Pitch. The form URL arrives by email. There is no live leaderboard.

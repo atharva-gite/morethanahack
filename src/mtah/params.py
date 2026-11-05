@@ -7,14 +7,17 @@ EVALUATION.md: baseline_smooth125 wins that window and loses the match.
 # A player has the ball at their feet. Nearest-body-on-the-pitch is not control.
 CONTROL_RADIUS_M = 2.5
 
-# A few tenths of a second. One frame is a deflection; this is a reception.
-# 8 frames is 0.32 s at 25 fps.
-DWELL_FRAMES = 8
+# How long a new team must actually keep the ball before it is a change.
+# CHALLENGE.md calls control "a few seconds". Three seconds at 25 fps, applied
+# to every frame, not only to spells that already look short.
+MIN_CONTROL_FRAMES = 75
 
-# CHALLENGE.md: a controlled possession is a player keeping the ball for a few
-# seconds, and a touch without that control is not a change. Two seconds at
-# 25 fps. A shorter spell is given back to the team that already had it.
-MIN_CONTROL_FRAMES = 50
+# A one-second hole in the tracking, or a loose ball, does not cancel a
+# challenge that is already underway and does not hand the ball over.
+CONTROL_GAP_FRAMES = 25
+
+# Passes in flight are not control, even if a player is the nearest body.
+MAX_CONTROL_SPEED_MPS = 15.0
 
 # Tracking noise puts an in-play ball just past the line. A metre does not.
 OUT_OF_PITCH_MARGIN_M = 1.0

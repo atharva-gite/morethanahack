@@ -1,0 +1,27 @@
+---
+description: Ranking metric and the targets this entry is trying to hit
+alwaysApply: true
+---
+
+# Targets
+
+Rank on full-match `spellF1`. `macroF1` is the tie-break only. A gain under ~0.04 spellF1 is noise. Do not chase frame accuracy.
+
+Floor to beat: `baseline_smooth50`, full-match spellF1 **0.2433** (macroF1 0.6724). Same idea four ways: nearest player to the ball, else `D`, then a majority window. Raw spellF1 is 0.0486 because it flickers.
+
+Success, in order:
+
+1. `validate_submission.py` passes on the exact file that will be uploaded.
+2. The public repo regenerates that file byte-for-byte from the data bundle.
+3. Full-match spellF1 above 0.2433, earned without tuning on the public window.
+4. `macroF1` at least in the baseline band (~0.63–0.68) so the tie-break is not given away.
+
+Design targets, since the full-match possession count is unpublished and must not be guessed:
+
+- A possession is a maximal run of `H` or `A`. `D` is a stoppage, never a possession. `H H D D H H` is two possessions.
+- Possessions should last on the order of many seconds. The public sample averages 14.2 s. The raw baseline's 2.0 s means flicker, not a target count to copy.
+- Ball is missing on 41% of graded frames. Hold state through a gap inside a possession. Do not treat "ball NaN" as dead ball; that is the baseline's weak `D`.
+- On graded frames, `X` is forward-filled for spellF1 (last label in that half). Abstain inside a possession. Guess at a hand-over. `macroF1` still counts every graded `X` as a miss.
+- Loose ball stays with the last team that had controlled possession. A touch, deflection, or aerial win without control is not a change. Restarts have a clear possessor. Dead-ball ownership is not asked: the label is `D`.
+
+Graded frames: 11185–90651 and 110808–190197. Second half is graded `D` from 110808 until kickoff at 113742. Elsewhere, `X` is free.

@@ -5,7 +5,8 @@ import os
 import numpy as np
 
 from mtah.params import (
-    CONTROL_RADIUS_M, DWELL_FRAMES, MIN_CONTROL_FRAMES, OUT_OF_PITCH_MARGIN_M,
+    CONTROL_GAP_FRAMES, CONTROL_RADIUS_M, MAX_CONTROL_SPEED_MPS,
+    MIN_CONTROL_FRAMES, OUT_OF_PITCH_MARGIN_M,
 )
 from mtah.regions import make_region_masks
 from mtah.signals import read_signals
@@ -40,7 +41,10 @@ def build_labels(data_dir=None, game="BAR-ATH"):
         ungraded,
         pre_kickoff,
         CONTROL_RADIUS_M,
-        DWELL_FRAMES,
+        MIN_CONTROL_FRAMES,
+        CONTROL_GAP_FRAMES,
+        signals.ball_speed,
+        MAX_CONTROL_SPEED_MPS,
     )
     return absorb_touches(labels, MIN_CONTROL_FRAMES)
 
