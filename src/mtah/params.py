@@ -14,8 +14,12 @@ RECEPTION_RADIUS_M = 2.5
 CONTEST_RADIUS_M = 2.0
 
 # The nearest opponent must be at least this much farther than the player on
-# the ball. A presser standing next to a pass does not take possession.
+# the ball. A player shoulder-to-shoulder with the ball does not take it.
 ISOLATION_GAP_M = 1.0
+
+# The possessing team is the one gathered around the ball. A single opponent
+# closer than that group is pressure, not a change. 12 m at 25 fps priors.
+SUPPORT_RADIUS_M = 12.0
 
 # Dribbling: ball speed and the controlling player's speed agree, in m/s.
 SPEED_MATCH_MPS = 4.0

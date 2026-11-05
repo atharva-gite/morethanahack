@@ -15,7 +15,7 @@ MISSING = "N"
 Signals = namedtuple(
     "Signals",
     "ball_present ball_x ball_y ball_speed nearest_dist nearest_team nearest_speed "
-    "second_dist second_team ball_out",
+    "second_dist second_team home_near away_near ball_out",
 )
 
 
@@ -43,7 +43,7 @@ def _parts(group):
     return x, y, speed
 
 
-def read_signals(raw_path, team_of_track, n_frames, pitch, margin_m):
+def read_signals(raw_path, team_of_track, n_frames, pitch, margin_m, support_radius_m=12.0):
     """Per-frame ball and nearest-player signals. Missing ball stays NaN.
 
     team_of_track is the slot array from starter.baseline.team_of_each_track:
@@ -59,7 +59,10 @@ def read_signals(raw_path, team_of_track, n_frames, pitch, margin_m):
     nearest_speed = np.full(n_frames, np.nan)
     second_dist = np.full(n_frames, np.nan)
     second_team = np.full(n_frames, -1, dtype=np.int8)
+    home_near = np.zeros(n_frames, dtype=np.int16)
+    away_near = np.zeros(n_frames, dtype=np.int16)
     ball_out = np.zeros(n_frames, dtype=bool)
+    support_2 = float(support_radius_m) * float(support_radius_m)
 
     with open(raw_path) as handle:
         for line in handle:
@@ -90,6 +93,8 @@ def read_signals(raw_path, team_of_track, n_frames, pitch, margin_m):
 
             best = None
             second = None
+            home_near_n = 0
+            away_near_n = 0
             for slot, group in enumerate(parts[1].split(GROUP_SEP)):
                 if slot >= len(team_of_track) or not group:
                     continue
@@ -100,6 +105,11 @@ def read_signals(raw_path, team_of_track, n_frames, pitch, margin_m):
                 dy = player[1] * width - y
                 distance = dx * dx + dy * dy
                 team = int(team_of_track[slot])
+                if distance <= support_2:
+                    if team == 0:
+                        home_near_n += 1
+                    else:
+                        away_near_n += 1
                 if best is None or distance < best[0]:
                     second = best
                     best = (distance, team, player[2])
@@ -112,8 +122,10 @@ def read_signals(raw_path, team_of_track, n_frames, pitch, margin_m):
             if second is not None:
                 second_dist[video_frame] = second[0] ** 0.5
                 second_team[video_frame] = second[1]
+            home_near[video_frame] = home_near_n
+            away_near[video_frame] = away_near_n
 
     return Signals(
         ball_present, ball_x, ball_y, ball_speed, nearest_dist, nearest_team,
-        nearest_speed, second_dist, second_team, ball_out,
+        nearest_speed, second_dist, second_team, home_near, away_near, ball_out,
     )

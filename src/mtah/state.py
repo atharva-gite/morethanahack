@@ -46,6 +46,15 @@ def _under_control(dist, team, ball_speed, player_speed, other_dist, other_team)
     )
 
 
+def _outnumbered(team, home_near, away_near):
+    """The other team has more players around the ball than this one."""
+    if team < 0 or home_near != home_near or away_near != away_near:
+        return False
+    own = home_near if team == 0 else away_near
+    other = away_near if team == 0 else home_near
+    return other > own
+
+
 def _letter(possessor):
     if possessor == 0:
         return "H"
@@ -58,7 +67,7 @@ def decide(ball_present, ball_out, nearest_dist, nearest_team,
            set_piece, restart_team, ungraded, pre_kickoff,
            control_radius_m, dwell_frames, gap_frames=0, ball_speed=None,
            max_control_speed=None, nearest_speed=None, second_dist=None,
-           second_team=None):
+           second_team=None, home_near=None, away_near=None):
     """Label every frame. Arrays are the same length. Possessor codes are 0/1.
 
     With player speeds, control means the ball is at a player's feet or has
@@ -123,6 +132,10 @@ def decide(ball_present, ball_out, nearest_dist, nearest_team,
             close = _under_control(
                 dist, team, speed, nearest_speed[i], other_dist, other_team,
             )
+            if close and home_near is not None and _outnumbered(
+                team, home_near[i], away_near[i],
+            ):
+                close = False
         else:
             close = False
         if close and team == possessor:

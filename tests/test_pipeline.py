@@ -213,6 +213,27 @@ def test_a_slow_ball_at_the_feet_is_control():
     assert list(labels) == ["X", "A", "A", "A"]
 
 
+def test_a_presser_does_not_take_the_ball_from_the_group():
+    n = 6
+    s = _blank(n)
+    s["ball_present"][:] = True
+    s["nearest_dist"][:] = 1.0
+    s["nearest_team"][:2] = 0
+    s["nearest_team"][2:] = 1
+    speed = np.full(n, 3.0)
+    second_dist = np.full(n, 8.0)
+    second_team = np.ones(n, dtype=np.int8)
+    home_near = np.full(n, 4, dtype=np.int16)
+    away_near = np.full(n, 1, dtype=np.int16)
+    labels = decide(
+        s["ball_present"], s["ball_out"], s["nearest_dist"], s["nearest_team"],
+        s["set_piece"], s["restart"], s["ungraded"], s["pre"],
+        2.5, 2, 0, speed, None, speed, second_dist, second_team,
+        home_near, away_near,
+    )
+    assert list(labels[1:]) == ["H"] * 5
+
+
 def test_a_nearby_opponent_does_not_take_a_pass():
     n = 6
     s = _blank(n)
