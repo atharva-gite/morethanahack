@@ -15,7 +15,9 @@ MISSING = "N"
 Signals = namedtuple(
     "Signals",
     "ball_present ball_x ball_y ball_speed nearest_dist nearest_team nearest_speed "
-    "second_dist second_team home_near away_near ball_out",
+    "nearest_slot second_dist second_team home_near away_near ball_out "
+    "home_dist away_dist home_speed away_speed home_x home_y away_x away_y "
+    "ball_vx ball_vy",
 )
 
 
@@ -43,11 +45,21 @@ def _parts(group):
     return x, y, speed
 
 
+def _fill_ball_velocity(ball_present, ball_x, ball_y, ball_vx, ball_vy, fps=25):
+    """Metres per second from consecutive visible ball positions. Missing stays NaN."""
+    for index in range(1, len(ball_present)):
+        if not ball_present[index] or not ball_present[index - 1]:
+            continue
+        ball_vx[index] = (ball_x[index] - ball_x[index - 1]) * fps
+        ball_vy[index] = (ball_y[index] - ball_y[index - 1]) * fps
+
+
 def read_signals(raw_path, team_of_track, n_frames, pitch, margin_m, support_radius_m=12.0):
     """Per-frame ball and nearest-player signals. Missing ball stays NaN.
 
     team_of_track is the slot array from starter.baseline.team_of_each_track:
     0 home, 1 away. nearest_team is -1 when no player is next to a visible ball.
+    Ball velocity is metres per second from consecutive visible positions.
     """
     length, width = pitch
     ball_present = np.zeros(n_frames, dtype=bool)
@@ -57,11 +69,22 @@ def read_signals(raw_path, team_of_track, n_frames, pitch, margin_m, support_rad
     nearest_dist = np.full(n_frames, np.nan)
     nearest_team = np.full(n_frames, -1, dtype=np.int8)
     nearest_speed = np.full(n_frames, np.nan)
+    nearest_slot = np.full(n_frames, -1, dtype=np.int16)
     second_dist = np.full(n_frames, np.nan)
     second_team = np.full(n_frames, -1, dtype=np.int8)
     home_near = np.zeros(n_frames, dtype=np.int16)
     away_near = np.zeros(n_frames, dtype=np.int16)
     ball_out = np.zeros(n_frames, dtype=bool)
+    home_dist = np.full(n_frames, np.nan)
+    away_dist = np.full(n_frames, np.nan)
+    home_speed = np.full(n_frames, np.nan)
+    away_speed = np.full(n_frames, np.nan)
+    home_x = np.full(n_frames, np.nan)
+    home_y = np.full(n_frames, np.nan)
+    away_x = np.full(n_frames, np.nan)
+    away_y = np.full(n_frames, np.nan)
+    ball_vx = np.full(n_frames, np.nan)
+    ball_vy = np.full(n_frames, np.nan)
     support_2 = float(support_radius_m) * float(support_radius_m)
 
     with open(raw_path) as handle:
@@ -93,6 +116,8 @@ def read_signals(raw_path, team_of_track, n_frames, pitch, margin_m, support_rad
 
             best = None
             second = None
+            home_best = None
+            away_best = None
             home_near_n = 0
             away_near_n = 0
             for slot, group in enumerate(parts[1].split(GROUP_SEP)):
@@ -105,6 +130,11 @@ def read_signals(raw_path, team_of_track, n_frames, pitch, margin_m, support_rad
                 dy = player[1] * width - y
                 distance = dx * dx + dy * dy
                 team = int(team_of_track[slot])
+                if team == 0:
+                    if home_best is None or distance < home_best[0]:
+                        home_best = (distance, player[2], player[0] * length, player[1] * width)
+                elif away_best is None or distance < away_best[0]:
+                    away_best = (distance, player[2], player[0] * length, player[1] * width)
                 if distance <= support_2:
                     if team == 0:
                         home_near_n += 1
@@ -112,20 +142,35 @@ def read_signals(raw_path, team_of_track, n_frames, pitch, margin_m, support_rad
                         away_near_n += 1
                 if best is None or distance < best[0]:
                     second = best
-                    best = (distance, team, player[2])
+                    best = (distance, team, player[2], slot)
                 elif second is None or distance < second[0]:
-                    second = (distance, team, player[2])
+                    second = (distance, team, player[2], slot)
             if best is not None:
                 nearest_dist[video_frame] = best[0] ** 0.5
                 nearest_team[video_frame] = best[1]
                 nearest_speed[video_frame] = best[2]
+                nearest_slot[video_frame] = best[3]
             if second is not None:
                 second_dist[video_frame] = second[0] ** 0.5
                 second_team[video_frame] = second[1]
             home_near[video_frame] = home_near_n
             away_near[video_frame] = away_near_n
+            if home_best is not None:
+                home_dist[video_frame] = home_best[0] ** 0.5
+                home_speed[video_frame] = home_best[1]
+                home_x[video_frame] = home_best[2]
+                home_y[video_frame] = home_best[3]
+            if away_best is not None:
+                away_dist[video_frame] = away_best[0] ** 0.5
+                away_speed[video_frame] = away_best[1]
+                away_x[video_frame] = away_best[2]
+                away_y[video_frame] = away_best[3]
+
+    _fill_ball_velocity(ball_present, ball_x, ball_y, ball_vx, ball_vy)
 
     return Signals(
         ball_present, ball_x, ball_y, ball_speed, nearest_dist, nearest_team,
-        nearest_speed, second_dist, second_team, home_near, away_near, ball_out,
+        nearest_speed, nearest_slot, second_dist, second_team, home_near, away_near,
+        ball_out, home_dist, away_dist, home_speed, away_speed,
+        home_x, home_y, away_x, away_y, ball_vx, ball_vy,
     )

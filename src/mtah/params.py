@@ -37,9 +37,25 @@ CONTROL_GAP_FRAMES = 10
 # straight into a stoppage, is a touch. One second at 25 fps.
 TOUCH_FRAMES = 25
 
-# Two controlled touches by the same team, with no dead ball between them and
-# no controlled touch by the opponent, are one pass. Four seconds at 25 fps.
-PASS_BRIDGE_FRAMES = 100
+# Two controlled touches by the same team are one pass only when the gap is a
+# touch, not a separate possession. One second at 25 fps. A longer gap is left
+# alone: the other team may have had the ball even if our control test missed it.
+PASS_BRIDGE_FRAMES = 25
+
+# A closest player who jumps farther than this between frames is a different
+# person. Slots are not identities. Four metres.
+CARRIER_JUMP_M = 4.0
+
+# The ball has actually arrived when its speed has fallen by this much over
+# the previous half-second, or it is moving with the player.
+SLOWDOWN_MPS = 2.0
+SLOWDOWN_LOOKBACK = 12
+
+# Visible, nearly stopped, and far from both teams, for a full second: a
+# restart. A missing ball is never this.
+STOPPED_BALL_MPS = 1.5
+FAR_FROM_PLAYERS_M = 8.0
+STOPPED_DEAD_FRAMES = 25
 
 # Tracking noise puts an in-play ball just past the line. A metre does not.
 OUT_OF_PITCH_MARGIN_M = 1.0

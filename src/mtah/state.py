@@ -1,12 +1,10 @@
-"""Control from the ball and the players around it, then a cleanup of touches.
+"""Possession from arrivals.
 
-Dead ball wins. A loose ball, a duel, or a pass still rolling past a standing
-opponent stays with the last team that had control. A new team takes the ball
-when it is at their feet and they are dribbling it or it has stopped with
-them. The label changes on the frame that reception sticks.
-
-A spell shorter than a second is a touch when the same team is on both
-sides, or when it dies straight into a stoppage. It never crosses a dead ball.
+Dead ball wins. The spell belongs to the team the ball last arrived to and
+stayed with. A pass in flight, a loose ball, and an opponent who is only
+nearby do not move it. The other team takes it when the ball arrives at one
+of their players and stays there. Slots are not people: a jump in distance
+is a different player.
 """
 
 import numpy as np
@@ -67,19 +65,335 @@ def _letter(possessor):
     return "X"
 
 
+def _motion_speed(ball_present, ball_x, ball_y, ball_speed):
+    """Speed from positions when two frames exist, otherwise the ATD scalar."""
+    n = len(ball_present)
+    out = np.array(ball_speed, dtype=float, copy=True) if ball_speed is not None else np.full(n, np.nan)
+    if ball_x is None or ball_y is None:
+        return out
+    for index in range(1, n):
+        if not ball_present[index] or not ball_present[index - 1]:
+            continue
+        vx = (ball_x[index] - ball_x[index - 1]) * 25.0
+        vy = (ball_y[index] - ball_y[index - 1]) * 25.0
+        out[index] = (vx * vx + vy * vy) ** 0.5
+    return out
+
+
+def _carrier_place(team, index, home_x, home_y, away_x, away_y):
+    if home_x is None:
+        return None
+    if team == 0:
+        return float(home_x[index]), float(home_y[index])
+    return float(away_x[index]), float(away_y[index])
+
+
+def _moved_too_far(previous, current):
+    if previous is None or current is None:
+        return False
+    if any(value != value for value in previous + current):
+        return False
+    dx = current[0] - previous[0]
+    dy = current[1] - previous[1]
+    from mtah.params import CARRIER_JUMP_M
+    return (dx * dx + dy * dy) ** 0.5 > CARRIER_JUMP_M
+
+
+def _touch_is_arrival(start, last, team, who, speed_used, home_speed, away_speed):
+    """A change of team is a reception: the ball slowed into them, or they are dribbling."""
+    from mtah.params import SLOWDOWN_LOOKBACK, SLOWDOWN_MPS
+
+    player_speed = home_speed if team == 0 else away_speed
+    for frame in range(start, last + 1):
+        if who[frame] != team:
+            continue
+        speed = speed_used[frame]
+        if _has_received(speed, player_speed[frame]):
+            return True
+        if frame < SLOWDOWN_LOOKBACK:
+            continue
+        earlier = speed_used[frame - SLOWDOWN_LOOKBACK]
+        if speed == speed and earlier == earlier and speed <= earlier - SLOWDOWN_MPS:
+            return True
+    return False
+
+
+def _mark_stopped_restarts(kind, who, ball_present, speed_used, home_dist, away_dist):
+    """Visible, stopped, and far from both teams for a full second becomes dead ball."""
+    from mtah.params import FAR_FROM_PLAYERS_M, STOPPED_BALL_MPS, STOPPED_DEAD_FRAMES
+
+    run = 0
+    start = 0
+    for index in range(len(kind)):
+        speed = speed_used[index]
+        far = (
+            home_dist[index] == home_dist[index] and away_dist[index] == away_dist[index]
+            and home_dist[index] > FAR_FROM_PLAYERS_M and away_dist[index] > FAR_FROM_PLAYERS_M
+        )
+        stopped = speed == speed and speed <= STOPPED_BALL_MPS
+        if kind[index] == "P" and ball_present[index] and far and stopped:
+            if run == 0:
+                start = index
+            run += 1
+            if run >= STOPPED_DEAD_FRAMES:
+                kind[start:index + 1] = "D"
+                who[start:index + 1] = -1
+            continue
+        run = 0
+
+
+def possess_from_arrivals(ball_present, ball_out, ball_speed, home_dist, away_dist,
+                          home_speed, away_speed, set_piece, restart_team, ungraded,
+                          pre_kickoff, dwell_frames, gap_frames, ball_x=None, ball_y=None,
+                          home_x=None, home_y=None, away_x=None, away_y=None):
+    """Who the ball arrives to, then who keeps it.
+
+    Each frame asks which team, if either, actually has the ball at a player's
+    feet. A reception is that contact lasting dwell_frames without the closest
+    player jumping to someone else. Until that reception sticks, and through
+    the pass that follows, the spell stays with the previous team. A touch
+    shorter than that is pressure. Dead ball and ungraded frames break the spell.
+    """
+    from mtah.params import (
+        CARRIER_JUMP_M, FAR_FROM_PLAYERS_M, SLOWDOWN_LOOKBACK, SLOWDOWN_MPS,
+        STOPPED_BALL_MPS, STOPPED_DEAD_FRAMES,
+    )
+
+    n = len(ball_present)
+    kind = np.full(n, "P", dtype="<U1")
+    who = np.full(n, -1, dtype=np.int8)
+    how_far = np.full(n, np.nan)
+    dwell_frames = max(1, int(dwell_frames))
+    gap_frames = max(0, int(gap_frames))
+
+    for index in range(n):
+        if ungraded[index]:
+            kind[index] = "X"
+            continue
+        if pre_kickoff[index] or set_piece[index] or ball_out[index]:
+            kind[index] = "D"
+            continue
+        if not ball_present[index]:
+            continue
+        speed = ball_speed[index] if ball_speed is not None else np.nan
+        home_ok = _under_control(
+            home_dist[index], 0, speed, home_speed[index], away_dist[index], 1,
+        )
+        away_ok = _under_control(
+            away_dist[index], 1, speed, away_speed[index], home_dist[index], 0,
+        )
+        if home_ok and not away_ok:
+            who[index] = 0
+            how_far[index] = home_dist[index]
+        elif away_ok and not home_ok:
+            who[index] = 1
+            how_far[index] = away_dist[index]
+
+    speed_used = _motion_speed(ball_present, ball_x, ball_y, ball_speed)
+    _mark_stopped_restarts(
+        kind, who, ball_present, speed_used, home_dist, away_dist,
+    )
+
+    touches = []
+    index = 0
+    while index < n:
+        if kind[index] != "P" or who[index] < 0:
+            index += 1
+            continue
+        team = int(who[index])
+        start = index
+        last = index
+        count = 1
+        hole = 0
+        prev_place = _carrier_place(team, index, home_x, home_y, away_x, away_y)
+        cursor = index + 1
+        while cursor < n and kind[cursor] == "P":
+            if who[cursor] == team:
+                place = _carrier_place(team, cursor, home_x, home_y, away_x, away_y)
+                if _moved_too_far(prev_place, place):
+                    break
+                count += 1
+                last = cursor
+                prev_place = place
+                hole = 0
+                cursor += 1
+                continue
+            if who[cursor] >= 0:
+                break
+            hole += 1
+            if hole > gap_frames:
+                break
+            cursor += 1
+        if count >= dwell_frames:
+            if touches and int(touches[-1][1]) != team and not _touch_is_arrival(
+                start, last, team, who, speed_used, home_speed, away_speed,
+            ):
+                index = last + 1
+                continue
+            seen = 0
+            stick = start
+            for frame in range(start, last + 1):
+                if who[frame] == team:
+                    seen += 1
+                    if seen >= dwell_frames:
+                        stick = frame
+                        break
+            touches.append((stick, team))
+        index = last + 1
+
+    labels = np.empty(n, dtype="<U1")
+    possessor = -1
+    touch_at = 0
+    for index in range(n):
+        if kind[index] == "X":
+            labels[index] = "X"
+            possessor = -1
+            continue
+        if kind[index] == "D":
+            labels[index] = "D"
+            restart = int(restart_team[index])
+            possessor = restart if restart >= 0 else -1
+            continue
+        restart = int(restart_team[index])
+        if restart >= 0:
+            possessor = restart
+        while touch_at < len(touches) and touches[touch_at][0] <= index:
+            possessor = touches[touch_at][1]
+            touch_at += 1
+        labels[index] = _letter(possessor)
+    return labels
+
+
+def _accepted_touches(controlled_slot, controlled_team, kind, dwell_frames, gap_frames):
+    """(stick_frame, team) for touches one slot actually keeps.
+
+    A hole shorter than gap_frames stays inside the touch. A different slot,
+    a dead ball, or an ungraded frame ends it. The stick frame is the moment
+    the touch has lasted dwell_frames, not the first instant of contact.
+    """
+    n = len(controlled_slot)
+    touches = []
+    index = 0
+    while index < n:
+        if kind[index] != "P" or controlled_slot[index] < 0:
+            index += 1
+            continue
+        slot = int(controlled_slot[index])
+        team = int(controlled_team[index])
+        start = index
+        last = index
+        count = 1
+        hole = 0
+        cursor = index + 1
+        while cursor < n and kind[cursor] == "P":
+            if controlled_slot[cursor] == slot:
+                count += 1
+                last = cursor
+                hole = 0
+                cursor += 1
+                continue
+            if controlled_slot[cursor] >= 0:
+                break
+            hole += 1
+            if hole > gap_frames:
+                break
+            cursor += 1
+        if count >= dwell_frames:
+            seen = 0
+            stick = start
+            for frame in range(start, last + 1):
+                if controlled_slot[frame] == slot:
+                    seen += 1
+                    if seen >= dwell_frames:
+                        stick = frame
+                        break
+            touches.append((stick, team))
+        index = last + 1
+    return touches
+
+
+def possess_from_touches(ball_present, ball_out, nearest_dist, nearest_team, nearest_slot,
+                         nearest_speed, second_dist, second_team, ball_speed,
+                         set_piece, restart_team, ungraded, pre_kickoff,
+                         dwell_frames, gap_frames):
+    """Possession is the chain of receptions, not the nearest body each frame.
+
+    The ball stays with the team of the last player who kept it. A pass, a
+    loose ball, and a touch too short to be a reception do not change that.
+    The other team takes over on the frame their own reception sticks.
+    """
+    n = len(ball_present)
+    kind = np.full(n, "P", dtype="<U1")
+    controlled_team = np.full(n, -1, dtype=np.int8)
+    controlled_slot = np.full(n, -1, dtype=np.int16)
+    dwell_frames = max(1, int(dwell_frames))
+    gap_frames = max(0, int(gap_frames))
+
+    for index in range(n):
+        if ungraded[index]:
+            kind[index] = "X"
+            continue
+        if pre_kickoff[index] or set_piece[index] or ball_out[index]:
+            kind[index] = "D"
+            continue
+        if not ball_present[index]:
+            continue
+        team = int(nearest_team[index])
+        other_dist = second_dist[index] if second_dist is not None else np.nan
+        other_team = int(second_team[index]) if second_team is not None else -1
+        speed = ball_speed[index] if ball_speed is not None else np.nan
+        player_speed = nearest_speed[index] if nearest_speed is not None else np.nan
+        if _under_control(
+            nearest_dist[index], team, speed, player_speed, other_dist, other_team,
+        ):
+            controlled_team[index] = team
+            controlled_slot[index] = int(nearest_slot[index])
+
+    touches = _accepted_touches(
+        controlled_slot, controlled_team, kind, dwell_frames, gap_frames,
+    )
+    labels = np.empty(n, dtype="<U1")
+    possessor = -1
+    touch_at = 0
+    for index in range(n):
+        if kind[index] == "X":
+            labels[index] = "X"
+            possessor = -1
+            continue
+        if kind[index] == "D":
+            labels[index] = "D"
+            restart = int(restart_team[index])
+            possessor = restart if restart >= 0 else -1
+            continue
+        restart = int(restart_team[index])
+        if restart >= 0:
+            possessor = restart
+        while touch_at < len(touches) and touches[touch_at][0] <= index:
+            possessor = touches[touch_at][1]
+            touch_at += 1
+        labels[index] = _letter(possessor)
+    return labels
+
+
 def decide(ball_present, ball_out, nearest_dist, nearest_team,
            set_piece, restart_team, ungraded, pre_kickoff,
            control_radius_m, dwell_frames, gap_frames=0, ball_speed=None,
            max_control_speed=None, nearest_speed=None, second_dist=None,
-           second_team=None, pass_frames=0):
+           second_team=None, nearest_slot=None, pass_frames=0):
     """Label every frame. Arrays are the same length. Possessor codes are 0/1.
 
-    With player speeds, control means the ball is at a player's feet or has
-    slowed into a reception, and the other team is not also on it. Without
-    those arrays, control falls back to distance inside control_radius_m.
-    A challenge survives gap_frames of a loose or missing ball. The new team
-    starts on the frame control sticks, not on the frames that led up to it.
+    With a slot id, possession is the chain of receptions: one player keeping
+    the ball, then whoever receives the pass. Without it, control falls back
+    to distance inside control_radius_m. A challenge survives gap_frames of a
+    loose or missing ball. The new team starts when the reception sticks.
     """
+    if nearest_slot is not None:
+        return possess_from_touches(
+            ball_present, ball_out, nearest_dist, nearest_team, nearest_slot,
+            nearest_speed, second_dist, second_team, ball_speed,
+            set_piece, restart_team, ungraded, pre_kickoff,
+            dwell_frames, gap_frames,
+        )
     n = len(ball_present)
     labels = np.empty(n, dtype="<U1")
     possessor = -1

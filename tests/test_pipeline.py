@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.join(ROOT, "src"))
 from mtah.fetch import WANTED, choose_members, extract_archive  # noqa: E402
 from mtah.regions import make_region_masks  # noqa: E402
 from mtah.signals import read_signals  # noqa: E402
-from mtah.state import absorb_touches, bridge_passes, decide  # noqa: E402
+from mtah.state import absorb_touches, bridge_passes, decide, possess_from_arrivals  # noqa: E402
 from mtah.tags import masks_from_events, side_of_team_tag  # noqa: E402
 
 
@@ -125,6 +125,115 @@ def test_named_restart_overrides_last_touch_and_na_does_not():
     assert list(labels) == ["H", "H", "D", "D", "H", "H"]
 
 
+def test_a_pass_stays_with_the_team_until_someone_receives_it():
+    n = 12
+    present = np.ones(n, dtype=bool)
+    out = np.zeros(n, dtype=bool)
+    dist = np.ones(n)
+    team = np.array([0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0], dtype=np.int8)
+    slot = np.array([3, 3, 3, 3, 8, 8, 4, 4, 4, 4, 4, 4], dtype=np.int16)
+    speed = np.full(n, 3.0)
+    second_dist = np.full(n, 8.0)
+    second_team = np.ones(n, dtype=np.int8)
+    piece = np.zeros(n, dtype=bool)
+    restart = np.full(n, -1, dtype=np.int8)
+    ungraded = np.zeros(n, dtype=bool)
+    pre = np.zeros(n, dtype=bool)
+    labels = decide(
+        present, out, dist, team, piece, restart, ungraded, pre,
+        2.5, 3, 1, speed, None, speed, second_dist, second_team, slot,
+    )
+    # Home keeps it through frame 2. Away's two frames are not a reception.
+    # The next home player receives on the third frame of that touch.
+    assert list(labels[:6]) == ["X", "X", "H", "H", "H", "H"]
+    assert list(labels[8:]) == ["H", "H", "H", "H"]
+
+
+def _arrival(n, dwell=6):
+    present = np.ones(n, dtype=bool)
+    out = np.zeros(n, dtype=bool)
+    ball_speed = np.full(n, 3.0)
+    home_dist = np.full(n, 8.0)
+    away_dist = np.full(n, 8.0)
+    home_speed = np.full(n, 3.0)
+    away_speed = np.full(n, 3.0)
+    piece = np.zeros(n, dtype=bool)
+    restart = np.full(n, -1, dtype=np.int8)
+    ungraded = np.zeros(n, dtype=bool)
+    pre = np.zeros(n, dtype=bool)
+    return (present, out, ball_speed, home_dist, away_dist, home_speed, away_speed,
+            piece, restart, ungraded, pre, dwell, 2)
+
+
+def test_a_pass_between_teammates_is_one_spell():
+    fields = list(_arrival(24))
+    home_dist, away_dist = fields[3], fields[4]
+    home_dist[:8] = 1.0
+    home_dist[16:] = 1.0
+    away_dist[8:12] = 1.2
+    fields[5][8:12] = 0.0  # home player speed irrelevant
+    fields[2][8:12] = 11.0  # ball still traveling
+    fields[6][8:12] = 1.0  # standing opponent
+    labels = possess_from_arrivals(*fields)
+    assert list(labels[5:]) == ["H"] * 19
+
+
+def test_a_brief_press_is_not_a_reception():
+    fields = list(_arrival(16))
+    fields[3][:8] = 1.0
+    fields[4][8:11] = 1.0
+    fields[6][8:11] = 3.0
+    labels = possess_from_arrivals(*fields)
+    assert list(labels[5:]) == ["H"] * 11
+
+
+def test_a_kept_ball_changes_team_when_it_sticks():
+    fields = list(_arrival(16, dwell=4))
+    fields[3][:6] = 1.0
+    fields[4][6:] = 1.0
+    labels = possess_from_arrivals(*fields)
+    assert list(labels[:3]) == ["X", "X", "X"]
+    assert list(labels[3:9]) == ["H"] * 6
+    assert list(labels[9:]) == ["A"] * 7
+
+
+def test_a_fast_constant_pass_does_not_change_team():
+    fields = list(_arrival(20, dwell=6))
+    fields[3][:8] = 1.0
+    fields[4][8:] = 1.0
+    fields[2][8:] = 6.0
+    fields[6][8:] = 0.0
+    labels = possess_from_arrivals(*fields)
+    assert "A" not in list(labels)
+
+
+def test_a_slowing_ball_is_a_reception():
+    fields = list(_arrival(24, dwell=6))
+    fields[3][:8] = 1.0
+    fields[2][:8] = 12.0
+    fields[4][8:] = 1.0
+    fields[2][8:] = 3.0
+    fields[6][8:] = 3.0
+    labels = possess_from_arrivals(*fields)
+    assert "A" in list(labels[12:])
+
+
+def test_a_stopped_ball_far_from_players_is_dead():
+    fields = list(_arrival(40))
+    fields[3][:] = 12.0
+    fields[4][:] = 12.0
+    fields[2][:] = 0.4
+    labels = possess_from_arrivals(*fields)
+    assert list(labels[:25]) == ["D"] * 25
+
+
+def test_a_missing_ball_is_not_dead():
+    fields = list(_arrival(40))
+    fields[0][:] = False
+    labels = possess_from_arrivals(*fields)
+    assert "D" not in list(labels)
+
+
 def test_a_pass_between_one_teams_touches_stays_with_them():
     labels = np.array(list("HHHAAAAHHH"))
     secure = np.full(10, -1, dtype=np.int8)
@@ -148,6 +257,14 @@ def test_a_pass_does_not_cross_a_dead_ball():
     secure[0:3] = 0
     secure[6:9] = 0
     assert "".join(bridge_passes(labels, secure, 10)) == "HHHDDDHHH"
+
+
+def test_a_gap_longer_than_a_touch_is_not_a_pass():
+    labels = np.array(list("HHH" + "A" * 40 + "HHH"))
+    secure = np.full(len(labels), -1, dtype=np.int8)
+    secure[:3] = 0
+    secure[-3:] = 0
+    assert "".join(bridge_passes(labels, secure, 25)) == "HHH" + "A" * 40 + "HHH"
 
 
 def test_brief_touch_between_the_same_team_disappears():

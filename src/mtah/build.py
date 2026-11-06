@@ -5,12 +5,11 @@ import os
 import numpy as np
 
 from mtah.params import (
-    CONTROL_GAP_FRAMES, OUT_OF_PITCH_MARGIN_M, PASS_BRIDGE_FRAMES, RECEPTION_FRAMES,
-    RECEPTION_RADIUS_M, TOUCH_FRAMES,
+    CONTROL_GAP_FRAMES, OUT_OF_PITCH_MARGIN_M, RECEPTION_FRAMES,
 )
 from mtah.regions import make_region_masks
 from mtah.signals import read_signals
-from mtah.state import absorb_touches, decide
+from mtah.state import possess_from_arrivals
 from mtah.tags import masks_from_events
 
 
@@ -31,26 +30,27 @@ def build_labels(data_dir=None, game="BAR-ATH"):
     )
     set_piece, restart = masks_from_events(load(game, data_dir), n_frames)
     ungraded, pre_kickoff = make_region_masks(n_frames, game)
-    labels = decide(
+    return possess_from_arrivals(
         signals.ball_present,
         signals.ball_out,
-        signals.nearest_dist,
-        signals.nearest_team,
+        signals.ball_speed,
+        signals.home_dist,
+        signals.away_dist,
+        signals.home_speed,
+        signals.away_speed,
         set_piece,
         restart,
         ungraded,
         pre_kickoff,
-        RECEPTION_RADIUS_M,
         RECEPTION_FRAMES,
         CONTROL_GAP_FRAMES,
-        signals.ball_speed,
-        None,
-        signals.nearest_speed,
-        signals.second_dist,
-        signals.second_team,
-        PASS_BRIDGE_FRAMES,
+        signals.ball_x,
+        signals.ball_y,
+        signals.home_x,
+        signals.home_y,
+        signals.away_x,
+        signals.away_y,
     )
-    return absorb_touches(labels, TOUCH_FRAMES)
 
 
 def write_submission(path, labels):
