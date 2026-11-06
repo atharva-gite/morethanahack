@@ -42,7 +42,11 @@ TOUCH_FRAMES = 25
 # alone: the other team may have had the ball even if our control test missed it.
 PASS_BRIDGE_FRAMES = 25
 
-# A closest player who jumps farther than this between frames is a different
+# A missing-ball run longer than this is owned by whoever the ball was
+# arriving to on the last visible frame. One second. Shorter holes already
+# stay with the last reception. The measured median hole is many seconds.
+GAP_OWN_FRAMES = 25
+APPROACH_FRAMES = 8
 # person. Slots are not identities. Four metres.
 CARRIER_JUMP_M = 4.0
 

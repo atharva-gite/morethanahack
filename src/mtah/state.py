@@ -142,6 +142,67 @@ def _mark_stopped_restarts(kind, who, ball_present, speed_used, home_dist, away_
         run = 0
 
 
+def _team_arriving(last, ball_present, home_dist, away_dist, home_speed, away_speed, speed_used):
+    """Team the ball is moving toward just before it disappears. -1 if neither."""
+    from mtah.params import APPROACH_FRAMES, FEET_RADIUS_M, ISOLATION_GAP_M, RECEPTION_RADIUS_M
+
+    if last < 0 or not ball_present[last]:
+        return -1
+    earlier = last
+    steps = 0
+    while earlier > 0 and steps < APPROACH_FRAMES and ball_present[earlier - 1]:
+        earlier -= 1
+        steps += 1
+    home_now = home_dist[last]
+    away_now = away_dist[last]
+    if home_now != home_now or away_now != away_now:
+        return -1
+    if min(home_now, away_now) > RECEPTION_RADIUS_M:
+        return -1
+    if home_now + ISOLATION_GAP_M <= away_now:
+        team = 0
+        dist_now = home_now
+        dist_then = home_dist[earlier]
+    elif away_now + ISOLATION_GAP_M <= home_now:
+        team = 1
+        dist_now = away_now
+        dist_then = away_dist[earlier]
+    else:
+        return -1
+    closing = dist_then == dist_then and dist_now < dist_then - 0.3
+    at_feet = dist_now <= FEET_RADIUS_M
+    if not closing and not at_feet:
+        return -1
+    player_speed = home_speed[last] if team == 0 else away_speed[last]
+    if not _has_received(speed_used[last], player_speed):
+        return -1
+    return team
+
+
+def _gap_receptions(ball_present, kind, home_dist, away_dist, home_speed, away_speed, speed_used):
+    """(first missing frame, team) for a long hole the ball disappeared into."""
+    from mtah.params import GAP_OWN_FRAMES
+
+    found = []
+    index = 0
+    n = len(ball_present)
+    while index < n:
+        if ball_present[index] or kind[index] != "P":
+            index += 1
+            continue
+        start = index
+        while index < n and (not ball_present[index]) and kind[index] == "P":
+            index += 1
+        if index - start < GAP_OWN_FRAMES:
+            continue
+        team = _team_arriving(
+            start - 1, ball_present, home_dist, away_dist, home_speed, away_speed, speed_used,
+        )
+        if team >= 0:
+            found.append((start, team))
+    return found
+
+
 def possess_from_arrivals(ball_present, ball_out, ball_speed, home_dist, away_dist,
                           home_speed, away_speed, set_piece, restart_team, ungraded,
                           pre_kickoff, dwell_frames, gap_frames, ball_x=None, ball_y=None,
@@ -240,6 +301,11 @@ def possess_from_arrivals(ball_present, ball_out, ball_speed, home_dist, away_di
                         break
             touches.append((stick, team))
         index = last + 1
+
+    touches.extend(_gap_receptions(
+        ball_present, kind, home_dist, away_dist, home_speed, away_speed, speed_used,
+    ))
+    touches.sort(key=lambda item: item[0])
 
     labels = np.empty(n, dtype="<U1")
     possessor = -1

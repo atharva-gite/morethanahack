@@ -227,6 +227,21 @@ def test_a_stopped_ball_far_from_players_is_dead():
     assert list(labels[:25]) == ["D"] * 25
 
 
+def test_a_long_gap_goes_to_the_team_the_ball_was_reaching():
+    fields = list(_arrival(40, dwell=6))
+    fields[3][:7] = 1.0
+    fields[3][7] = 6.0
+    fields[4][4] = 4.0
+    fields[4][5] = 3.0
+    fields[4][6] = 2.0
+    fields[4][7] = 1.0
+    fields[6][4:8] = 3.0
+    fields[0][8:] = False
+    labels = possess_from_arrivals(*fields)
+    assert list(labels[5:8]) == ["H", "H", "H"]
+    assert list(labels[8:]) == ["A"] * 32
+
+
 def test_a_missing_ball_is_not_dead():
     fields = list(_arrival(40))
     fields[0][:] = False
